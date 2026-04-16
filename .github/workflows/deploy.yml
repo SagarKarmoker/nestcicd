@@ -1,0 +1,43 @@
+name: Deployment
+on:
+  push:
+    branches: [master]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            command -v pnpm >/dev/null 2>&1 || npm install -g pnpm
+            command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+            cd /home/sagar/nestcicd
+            git pull --ff-only origin master
+            pnpm install --frozen-lockfile
+            pnpm run build
+            pm2 startOrReload ecosystem.config.cjs --env production
+            pm2 save
